@@ -7,14 +7,760 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .lucide {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            stroke-width: 2;
+            stroke: currentColor;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+    </style>
 </head>
 <body>
     <div id="root"></div>
+    
     <script type="text/babel">
-        // 여기에 React 컴포넌트 코드가 들어갑니다
-        // (현재 아티팩트의 전체 코드)
+        const { useState, useEffect, useRef } = React;
+        
+        // 아이콘 컴포넌트들
+        const AlertTriangle = ({ className }) => (
+            <svg className={`lucide ${className}`} viewBox="0 0 24 24">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+                <path d="M12 9v4"/>
+                <path d="m12 17 .01 0"/>
+            </svg>
+        );
+        
+        const Thermometer = ({ className }) => (
+            <svg className={`lucide ${className}`} viewBox="0 0 24 24">
+                <path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>
+            </svg>
+        );
+        
+        const CheckCircle = ({ className }) => (
+            <svg className={`lucide ${className}`} viewBox="0 0 24 24">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <path d="m9 11 3 3L22 4"/>
+            </svg>
+        );
+        
+        const XCircle = ({ className }) => (
+            <svg className={`lucide ${className}`} viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="m15 9-6 6"/>
+                <path d="m9 9 6 6"/>
+            </svg>
+        );
+        
+        const Play = ({ className }) => (
+            <svg className={`lucide ${className}`} viewBox="0 0 24 24">
+                <polygon points="5,3 19,12 5,21"/>
+            </svg>
+        );
+        
+        const Pause = ({ className }) => (
+            <svg className={`lucide ${className}`} viewBox="0 0 24 24">
+                <rect x="6" y="4" width="4" height="16"/>
+                <rect x="14" y="4" width="4" height="16"/>
+            </svg>
+        );
+        
+        const RotateCcw = ({ className }) => (
+            <svg className={`lucide ${className}`} viewBox="0 0 24 24">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+            </svg>
+        );
+        
+        const Download = ({ className }) => (
+            <svg className={`lucide ${className}`} viewBox="0 0 24 24">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7,10 12,15 17,10"/>
+                <line x1="12" x2="12" y1="15" y2="3"/>
+            </svg>
+        );
+        
+        const Database = ({ className }) => (
+            <svg className={`lucide ${className}`} viewBox="0 0 24 24">
+                <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                <path d="M3 5v14a9 3 0 0 0 18 0V5"/>
+                <path d="M3 12a9 3 0 0 0 18 0"/>
+            </svg>
+        );
+
+        const ProductionMonitoring = () => {
+            const [isRunning, setIsRunning] = useState(false);
+            const [temperatureData, setTemperatureData] = useState([]);
+            const [currentTemp, setCurrentTemp] = useState(22);
+            const [alerts, setAlerts] = useState([]);
+            const [totalDataCount, setTotalDataCount] = useState(0);
+            const [showDataModal, setShowDataModal] = useState(false);
+            const [modalData, setModalData] = useState({ csv: '', filename: '', type: '', count: 0 });
+            const [settings, setSettings] = useState({
+                minTemp: 18,
+                maxTemp: 25,
+                targetTemp: 22,
+                location: '생산라인 A'
+            });
+            
+            const canvasRef = useRef(null);
+            const STORAGE_KEY = 'production_temp_data';
+            const ALERTS_STORAGE_KEY = 'production_alerts_data';
+
+            const generateTemperature = () => {
+                const variation = (Math.random() - 0.5) * 2;
+                const newTemp = Math.max(15, Math.min(30, currentTemp + variation));
+                return Math.round(newTemp * 10) / 10;
+            };
+
+            const saveToStorage = (data, key) => {
+                try {
+                    localStorage.setItem(key, JSON.stringify(data));
+                } catch (error) {
+                    console.error('저장 실패:', error);
+                }
+            };
+
+            const loadFromStorage = (key) => {
+                try {
+                    const data = localStorage.getItem(key);
+                    return data ? JSON.parse(data) : [];
+                } catch (error) {
+                    return [];
+                }
+            };
+
+            useEffect(() => {
+                const savedData = loadFromStorage(STORAGE_KEY);
+                const savedAlerts = loadFromStorage(ALERTS_STORAGE_KEY);
+                
+                if (savedData.length > 0) {
+                    setTotalDataCount(savedData.length);
+                    setTemperatureData(savedData.slice(-20));
+                }
+                
+                if (savedAlerts.length > 0) {
+                    setAlerts(savedAlerts.slice(0, 10));
+                }
+            }, []);
+
+            const downloadData = (type) => {
+                const allData = loadFromStorage(type === 'temperature' ? STORAGE_KEY : ALERTS_STORAGE_KEY);
+                
+                if (allData.length === 0) {
+                    alert('다운로드할 데이터가 없습니다.');
+                    return;
+                }
+                
+                let csv = '';
+                
+                if (type === 'temperature') {
+                    csv = '날짜,시간,생산라인,온도(°C),목표온도(°C),최소온도(°C),최대온도(°C),상태\n';
+                    allData.forEach(item => {
+                        const status = item.temperature < settings.minTemp ? '낮음' : 
+                                     item.temperature > settings.maxTemp ? '높음' : '정상';
+                        csv += `${new Date().toLocaleDateString('ko-KR')},${item.time},${settings.location},${item.temperature},${settings.targetTemp},${settings.minTemp},${settings.maxTemp},${status}\n`;
+                    });
+                } else {
+                    csv = '날짜,시간,생산라인,알림유형,온도(°C),메시지\n';
+                    allData.forEach(alert => {
+                        csv += `${new Date().toLocaleDateString('ko-KR')},${alert.time},${settings.location},${alert.type === 'LOW' ? '하한초과' : '상한초과'},${alert.temperature},"${alert.message}"\n`;
+                    });
+                }
+                
+                const today = new Date();
+                const dateStr = today.getFullYear() + '-' + 
+                               String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                               String(today.getDate()).padStart(2, '0');
+                const timeStr = String(today.getHours()).padStart(2, '0') + 
+                               String(today.getMinutes()).padStart(2, '0');
+                const filename = `${settings.location}_${type}_${dateStr}_${timeStr}.csv`;
+                
+                setModalData({
+                    csv: '\uFEFF' + csv,
+                    filename: filename,
+                    type: type === 'temperature' ? '온도' : '알림',
+                    count: allData.length
+                });
+                setShowDataModal(true);
+            };
+
+            const copyToClipboard = () => {
+                const textArea = document.createElement('textarea');
+                textArea.value = modalData.csv;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.select();
+                textArea.setSelectionRange(0, 99999);
+                
+                try {
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    alert(`✅ ${modalData.type} 데이터가 클립보드에 복사되었습니다!\n\n📝 다운로드 방법:\n1. 메모장(Notepad) 열기\n2. 붙여넣기 (Ctrl+V)\n3. "다른 이름으로 저장"에서 파일명: ${modalData.filename}\n4. 파일 형식: "모든 파일(*.*)"\n5. 저장 후 Excel에서 열기`);
+                } catch (err) {
+                    alert('❌ 복사에 실패했습니다. 수동으로 텍스트를 선택하여 복사해주세요.');
+                }
+            };
+
+            const drawChart = () => {
+                const canvas = canvasRef.current;
+                if (!canvas || temperatureData.length === 0) return;
+
+                const ctx = canvas.getContext('2d');
+                const width = canvas.width;
+                const height = canvas.height;
+
+                ctx.clearRect(0, 0, width, height);
+
+                const padding = 60;
+                const chartWidth = width - padding * 2;
+                const chartHeight = height - padding * 2;
+
+                const temps = temperatureData.map(d => d.temperature);
+                const minTempValue = Math.min(...temps, settings.minTemp) - 1;
+                const maxTempValue = Math.max(...temps, settings.maxTemp) + 1;
+                const tempRange = maxTempValue - minTempValue;
+
+                ctx.fillStyle = '#f9fafb';
+                ctx.fillRect(padding, padding, chartWidth, chartHeight);
+
+                ctx.strokeStyle = '#e5e7eb';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= 10; i++) {
+                    const y = padding + (chartHeight / 10) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(padding, y);
+                    ctx.lineTo(padding + chartWidth, y);
+                    ctx.stroke();
+                }
+
+                for (let i = 0; i <= 10; i++) {
+                    const x = padding + (chartWidth / 10) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(x, padding);
+                    ctx.lineTo(x, padding + chartHeight);
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = '#6b7280';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'right';
+                for (let i = 0; i <= 5; i++) {
+                    const temp = minTempValue + (tempRange / 5) * (5 - i);
+                    const y = padding + (chartHeight / 5) * i + 5;
+                    ctx.fillText(temp.toFixed(1) + '°C', padding - 10, y);
+                }
+
+                const getY = (temp) => padding + chartHeight - ((temp - minTempValue) / tempRange) * chartHeight;
+
+                ctx.strokeStyle = '#16a34a';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(padding, getY(settings.targetTemp));
+                ctx.lineTo(padding + chartWidth, getY(settings.targetTemp));
+                ctx.stroke();
+
+                ctx.strokeStyle = '#dc2626';
+                ctx.setLineDash([3, 3]);
+                ctx.beginPath();
+                ctx.moveTo(padding, getY(settings.minTemp));
+                ctx.lineTo(padding + chartWidth, getY(settings.minTemp));
+                ctx.stroke();
+
+                ctx.strokeStyle = '#ea580c';
+                ctx.setLineDash([3, 3]);
+                ctx.beginPath();
+                ctx.moveTo(padding, getY(settings.maxTemp));
+                ctx.lineTo(padding + chartWidth, getY(settings.maxTemp));
+                ctx.stroke();
+
+                ctx.strokeStyle = '#2563eb';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([]);
+                ctx.beginPath();
+
+                temperatureData.forEach((data, index) => {
+                    const x = padding + (chartWidth / (temperatureData.length - 1)) * index;
+                    const y = getY(data.temperature);
+                    
+                    if (index === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                });
+                ctx.stroke();
+
+                ctx.fillStyle = '#2563eb';
+                temperatureData.forEach((data, index) => {
+                    const x = padding + (chartWidth / (temperatureData.length - 1)) * index;
+                    const y = getY(data.temperature);
+                    
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+            };
+
+            useEffect(() => {
+                let interval;
+                if (isRunning) {
+                    interval = setInterval(() => {
+                        const newTemp = generateTemperature();
+                        const now = new Date();
+                        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+                        
+                        setCurrentTemp(newTemp);
+                        
+                        setTemperatureData(prevData => {
+                            const newDataPoint = {
+                                time: timeStr,
+                                temperature: newTemp
+                            };
+                            const updatedData = [...prevData, newDataPoint];
+                            
+                            const allStoredData = loadFromStorage(STORAGE_KEY);
+                            const allUpdatedData = [...allStoredData, newDataPoint];
+                            saveToStorage(allUpdatedData, STORAGE_KEY);
+                            setTotalDataCount(allUpdatedData.length);
+                            
+                            return updatedData.slice(-20);
+                        });
+
+                        if (newTemp < settings.minTemp || newTemp > settings.maxTemp) {
+                            const alertType = newTemp < settings.minTemp ? 'LOW' : 'HIGH';
+                            const alertMessage = `온도 ${alertType === 'LOW' ? '하한' : '상한'}선 초과: ${newTemp}°C`;
+                            
+                            setAlerts(prev => {
+                                const newAlert = {
+                                    id: Date.now(),
+                                    type: alertType,
+                                    message: alertMessage,
+                                    time: timeStr,
+                                    temperature: newTemp
+                                };
+                                
+                                const allStoredAlerts = loadFromStorage(ALERTS_STORAGE_KEY);
+                                const allUpdatedAlerts = [newAlert, ...allStoredAlerts];
+                                saveToStorage(allUpdatedAlerts, ALERTS_STORAGE_KEY);
+                                
+                                return [newAlert, ...prev.slice(0, 9)];
+                            });
+                        }
+                    }, 2000);
+                }
+                
+                return () => clearInterval(interval);
+            }, [isRunning, currentTemp, settings.minTemp, settings.maxTemp]);
+
+            useEffect(() => {
+                drawChart();
+            }, [temperatureData, settings]);
+
+            const getTemperatureStatus = () => {
+                if (currentTemp < settings.minTemp) return { color: 'text-blue-600', bgColor: 'bg-blue-50' };
+                if (currentTemp > settings.maxTemp) return { color: 'text-red-600', bgColor: 'bg-red-50' };
+                return { color: 'text-green-600', bgColor: 'bg-green-50' };
+            };
+
+            const tempStatus = getTemperatureStatus();
+
+            const resetData = () => {
+                setTemperatureData([]);
+                setAlerts([]);
+                setCurrentTemp(22);
+                setTotalDataCount(0);
+                localStorage.removeItem(STORAGE_KEY);
+                localStorage.removeItem(ALERTS_STORAGE_KEY);
+            };
+
+            const getStorageStats = () => {
+                const allTempData = loadFromStorage(STORAGE_KEY);
+                const allAlerts = loadFromStorage(ALERTS_STORAGE_KEY);
+                
+                return {
+                    totalRecords: allTempData.length,
+                    totalAlerts: allAlerts.length,
+                    firstRecord: allTempData.length > 0 ? allTempData[0].time : null,
+                    lastRecord: allTempData.length > 0 ? allTempData[allTempData.length - 1].time : null
+                };
+            };
+
+            return (
+                <div className="max-w-6xl mx-auto p-6 bg-gray-50 min-h-screen">
+                    <div className="mb-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h1 className="text-3xl font-bold text-gray-800 mb-2">생산공정 온도 모니터링 시스템 V1.1</h1>
+                                <p className="text-gray-600">실시간 온도 데이터를 모니터링하고 품질 관리를 위한 대시보드</p>
+                            </div>
+                            <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-semibold">
+                                Version 1.1
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-semibold text-gray-700">제어 패널</h2>
+                            <div className="flex space-x-2">
+                                <button
+                                    onClick={() => downloadData('temperature')}
+                                    className="flex items-center px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium"
+                                >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    온도데이터 다운로드
+                                </button>
+                                <button
+                                    onClick={() => downloadData('alerts')}
+                                    className="flex items-center px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium"
+                                >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    알림데이터 다운로드
+                                </button>
+                                <button
+                                    onClick={() => setIsRunning(!isRunning)}
+                                    className={`flex items-center px-4 py-2 rounded-lg font-medium ${
+                                        isRunning 
+                                            ? 'bg-red-500 hover:bg-red-600 text-white' 
+                                            : 'bg-green-500 hover:bg-green-600 text-white'
+                                    }`}
+                                >
+                                    {isRunning ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                                    {isRunning ? '모니터링 중지' : '모니터링 시작'}
+                                </button>
+                                <button
+                                    onClick={resetData}
+                                    className="flex items-center px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium"
+                                >
+                                    <RotateCcw className="w-4 h-4 mr-2" />
+                                    전체 초기화
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">생산라인</label>
+                                <input
+                                    type="text"
+                                    value={settings.location}
+                                    onChange={(e) => setSettings({...settings, location: e.target.value})}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">최소 온도 (°C)</label>
+                                <input
+                                    type="number"
+                                    value={settings.minTemp}
+                                    onChange={(e) => setSettings({...settings, minTemp: Number(e.target.value)})}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">최대 온도 (°C)</label>
+                                <input
+                                    type="number"
+                                    value={settings.maxTemp}
+                                    onChange={(e) => setSettings({...settings, maxTemp: Number(e.target.value)})}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">목표 온도 (°C)</label>
+                                <input
+                                    type="number"
+                                    value={settings.targetTemp}
+                                    onChange={(e) => setSettings({...settings, targetTemp: Number(e.target.value)})}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                        <div className={`${tempStatus.bgColor} rounded-lg p-6 border-l-4 ${tempStatus.color.replace('text-', 'border-')}`}>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-blue-600 font-medium">총 온도 기록</p>
+                                    <p className="text-2xl font-bold text-blue-700">{getStorageStats().totalRecords.toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <div className="bg-red-50 p-4 rounded-lg">
+                                <div>
+                                    <p className="text-sm text-red-600 font-medium">총 알림 기록</p>
+                                    <p className="text-2xl font-bold text-red-700">{getStorageStats().totalAlerts.toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <div className="bg-green-50 p-4 rounded-lg">
+                                <div>
+                                    <p className="text-sm text-green-600 font-medium">첫 기록 시간</p>
+                                    <p className="text-lg font-semibold text-green-700">
+                                        {getStorageStats().firstRecord || '-'}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="bg-purple-50 p-4 rounded-lg">
+                                <div>
+                                    <p className="text-sm text-purple-600 font-medium">최근 기록 시간</p>
+                                    <p className="text-lg font-semibold text-purple-700">
+                                        {getStorageStats().lastRecord || '-'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                            <p className="text-sm text-yellow-800">
+                                <strong>💾 데이터 백업 안내:</strong> 모든 데이터가 브라우저에 안전하게 저장됩니다. 
+                                정기적으로 다운로드 버튼을 클릭하여 Excel에서 분석 가능한 CSV 파일로 백업하세요.
+                            </p>
+                        </div>
+                    </div>
+
+                    {temperatureData.length > 0 && (
+                        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                            <h3 className="text-lg font-semibold text-gray-700 mb-4">최근 온도 데이터</h3>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full table-auto">
+                                    <thead>
+                                        <tr className="bg-gray-50">
+                                            <th className="px-4 py-2 text-left">시간</th>
+                                            <th className="px-4 py-2 text-left">온도 (°C)</th>
+                                            <th className="px-4 py-2 text-left">상태</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {temperatureData.slice(-5).reverse().map((data, index) => (
+                                            <tr key={index} className="border-t">
+                                                <td className="px-4 py-2">{data.time}</td>
+                                                <td className="px-4 py-2 font-mono">{data.temperature}</td>
+                                                <td className="px-4 py-2">
+                                                    <span className={`px-2 py-1 rounded text-xs ${
+                                                        data.temperature < settings.minTemp ? 'bg-blue-100 text-blue-800' :
+                                                        data.temperature > settings.maxTemp ? 'bg-red-100 text-red-800' :
+                                                        'bg-green-100 text-green-800'
+                                                    }`}>
+                                                        {data.temperature < settings.minTemp ? '낮음' :
+                                                         data.temperature > settings.maxTemp ? '높음' : '정상'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="bg-white rounded-lg shadow-md p-6">
+                        <h3 className="text-lg font-semibold text-gray-700 mb-4">알림 로그</h3>
+                        {alerts.length === 0 ? (
+                            <p className="text-gray-500 text-center py-8">현재 알림이 없습니다.</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {alerts.map((alert) => (
+                                    <div
+                                        key={alert.id}
+                                        className={`p-3 rounded-lg border-l-4 ${
+                                            alert.type === 'LOW' ? 'bg-blue-50 border-blue-400' : 'bg-red-50 border-red-400'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center space-x-2">
+                                                <AlertTriangle className={`w-4 h-4 ${alert.type === 'LOW' ? 'text-blue-600' : 'text-red-600'}`} />
+                                                <span className="font-medium text-gray-700">{alert.message}</span>
+                                            </div>
+                                            <span className="text-sm text-gray-500">{alert.time}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 데이터 다운로드 모달 */}
+                    {showDataModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+                                <div className="p-6 border-b border-gray-200">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h2 className="text-2xl font-bold text-gray-800">📊 {modalData.type} 데이터 다운로드</h2>
+                                            <p className="text-gray-600 mt-2">
+                                                <strong>파일명:</strong> {modalData.filename} | <strong>데이터:</strong> {modalData.count.toLocaleString()}개
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => setShowDataModal(false)}
+                                            className="text-gray-400 hover:text-gray-600 text-2xl"
+                                        >
+                                            ✖️
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div className="p-6">
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                        <h3 className="font-semibold text-blue-800 mb-2">💡 다운로드 방법:</h3>
+                                        <ol className="text-sm text-blue-700 space-y-1">
+                                            <li><strong>1.</strong> 아래 "📋 데이터 복사" 버튼을 클릭하세요</li>
+                                            <li><strong>2.</strong> 메모장(Notepad)을 열고 붙여넣기 (Ctrl+V)</li>
+                                            <li><strong>3.</strong> "다른 이름으로 저장"에서 파일명을 <code>{modalData.filename}</code>로 입력</li>
+                                            <li><strong>4.</strong> 파일 형식을 "모든 파일(*.*)"로 변경</li>
+                                            <li><strong>5.</strong> 저장 후 Excel에서 열기</li>
+                                        </ol>
+                                    </div>
+                                    
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">CSV 데이터 미리보기:</label>
+                                        <textarea
+                                            value={modalData.csv}
+                                            readOnly
+                                            className="w-full h-64 p-3 border border-gray-300 rounded-md font-mono text-xs bg-gray-50 resize-none"
+                                            style={{ whiteSpace: 'pre' }}
+                                        />
+                                    </div>
+                                    
+                                    <div className="flex justify-center space-x-4">
+                                        <button
+                                            onClick={copyToClipboard}
+                                            className="flex items-center px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium"
+                                        >
+                                            📋 데이터 복사
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const textarea = document.querySelector('textarea[readonly]');
+                                                textarea.select();
+                                                textarea.setSelectionRange(0, 99999);
+                                            }}
+                                            className="flex items-center px-6 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium"
+                                        >
+                                            📝 전체 선택
+                                        </button>
+                                        <button
+                                            onClick={() => setShowDataModal(false)}
+                                            className="flex items-center px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium"
+                                        >
+                                            ✖️ 닫기
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<ProductionMonitoring />, document.getElementById('root'));
     </script>
 </body>
-</html>
+</html>="text-sm font-medium text-gray-600">현재 온도</p>
+                                    <p className={`text-3xl font-bold ${tempStatus.color}`}>{currentTemp}°C</p>
+                                </div>
+                                <Thermometer className={`w-8 h-8 ${tempStatus.color}`} />
+                            </div>
+                            <p className="text-sm text-gray-600 mt-2">
+                                목표: {settings.targetTemp}°C
+                            </p>
+                        </div>
+
+                        <div className="bg-white rounded-lg p-6 shadow-md">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-600">모니터링 상태</p>
+                                    <p className={`text-lg font-semibold ${isRunning ? 'text-green-600' : 'text-gray-600'}`}>
+                                        {isRunning ? '실행 중' : '중지됨'}
+                                    </p>
+                                </div>
+                                {isRunning ? (
+                                    <CheckCircle className="w-8 h-8 text-green-600" />
+                                ) : (
+                                    <XCircle className="w-8 h-8 text-gray-400" />
+                                )}
+                            </div>
+                            <p className="text-sm text-gray-600 mt-2">
+                                화면 데이터: {temperatureData.length}개
+                            </p>
+                        </div>
+
+                        <div className="bg-white rounded-lg p-6 shadow-md">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-600">누적 데이터</p>
+                                    <p className="text-lg font-semibold text-blue-600">{totalDataCount.toLocaleString()}개</p>
+                                </div>
+                                <Database className="w-8 h-8 text-blue-600" />
+                            </div>
+                            <p className="text-sm text-gray-600 mt-2">
+                                전체 저장된 온도 기록
+                            </p>
+                        </div>
+
+                        <div className="bg-white rounded-lg p-6 shadow-md">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-600">알림 상태</p>
+                                    <p className={`text-lg font-semibold ${alerts.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                        {alerts.length > 0 ? `${alerts.length}개 알림` : '정상'}
+                                    </p>
+                                </div>
+                                <AlertTriangle className={`w-8 h-8 ${alerts.length > 0 ? 'text-red-600' : 'text-green-600'}`} />
+                            </div>
+                            <p className="text-sm text-gray-600 mt-2">
+                                범위: {settings.minTemp}°C ~ {settings.maxTemp}°C
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <h3 className="text-lg font-semibold text-gray-700 mb-4">
+                            실시간 온도 차트 V1.1 (데이터: {temperatureData.length}개)
+                        </h3>
+                        
+                        <div className="mb-4 p-3 bg-gray-100 rounded text-sm">
+                            <p>현재 온도: {currentTemp}°C | 모니터링: {isRunning ? '실행중' : '중지'} | 화면 데이터: {temperatureData.length}개 | 누적 저장: {totalDataCount.toLocaleString()}개</p>
+                            {temperatureData.length > 0 && (
+                                <p>최근 데이터: {temperatureData[temperatureData.length - 1].time} - {temperatureData[temperatureData.length - 1].temperature}°C</p>
+                            )}
+                        </div>
+
+                        {temperatureData.length === 0 ? (
+                            <div className="h-80 flex items-center justify-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                                <div className="text-center">
+                                    <Thermometer className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                                    <p className="text-gray-500 text-lg">모니터링을 시작하면 온도 데이터가 여기에 표시됩니다</p>
+                                    <p className="text-gray-400 text-sm mt-2">시작 버튼을 클릭하세요</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="border rounded-lg p-4 bg-white">
+                                <canvas 
+                                    ref={canvasRef}
+                                    width={800}
+                                    height={400}
+                                    className="w-full max-w-full"
+                                    style={{ maxHeight: '400px' }}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <h3 className="text-lg font-semibold text-gray-700 mb-4 flex items-center">
+                            <Database className="w-5 h-5 mr-2" />
+                            데이터 저장 현황
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="bg-blue-50 p-4 rounded-lg">
+                                <div>
+                                    <p className
